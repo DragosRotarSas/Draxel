@@ -12,9 +12,9 @@ import org.example.model.RequirementProfile;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.awt.event.ItemEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -22,6 +22,8 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /**
  * Multi-screen UI:
@@ -84,15 +86,16 @@ public class AppFrame extends JFrame {
 
         getContentPane().setBackground(Color.BLACK);
 
-        // load fonts used across screens
-        fredoka = loadFontIfPresent("icons/Fredoka.ttf", 42f, Font.BOLD, getFont());
-        dmSans  = loadFontIfPresent("icons/DMSans.ttf", 18f, Font.PLAIN, getFont());
+        // load fonts used across screens (using safe fallback)
+        fredoka = loadFontIfPresent("icons/Fredoka.ttf", 42f, Font.BOLD, fallbackFont());
+        dmSans  = loadFontIfPresent("icons/DMSans.ttf", 18f, Font.PLAIN, fallbackFont());
 
-        UIManager.put("Button.font", dmSans);
-        UIManager.put("Label.font", dmSans);
-        UIManager.put("CheckBox.font", dmSans);
-        UIManager.put("OptionPane.messageFont", dmSans);
-        UIManager.put("OptionPane.buttonFont", dmSans);
+        // Ensure non-italic defaults
+        UIManager.put("Button.font", dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
+        UIManager.put("Label.font", dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
+        UIManager.put("CheckBox.font", dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
+        UIManager.put("OptionPane.messageFont", dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
+        UIManager.put("OptionPane.buttonFont", dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
 
         // now it's safe to create text areas that use dmSans
         featureArea = createResultTextArea();
@@ -135,19 +138,20 @@ public class AppFrame extends JFrame {
         JPanel page = basePage();
 
         JLabel title = new JLabel("In which category does your 3D Model fit?");
-        title.setFont(fredoka.deriveFont(36f));
+        title.setFont(fredoka != null ? fredoka.deriveFont(Font.BOLD, 36f) : fallbackFont().deriveFont(Font.BOLD, 36f));
         title.setForeground(new Color(240, 240, 240));
         title.setHorizontalAlignment(SwingConstants.CENTER);
-        title.setBorder(new EmptyBorder(24, 0, 36, 0));
+        title.setBorder(new EmptyBorder(100, 0, 100, 0)); // spacing above the cards
 
         JPanel cardsRow = new JPanel();
         cardsRow.setOpaque(false);
         cardsRow.setLayout(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(10, 24, 10, 24);
+        gbc.anchor = GridBagConstraints.PAGE_START;
 
         JPanel decorative = selectionCard(
-                "Decorative", "Lorem ipsum", "icons/bulb.png",
+                "Decorative", "Models for aesthetic and visual purposes", "icons/bulb.png",
                 () -> {
                     currentFunctional = false;
                     backButton.setVisible(true);
@@ -155,18 +159,31 @@ public class AppFrame extends JFrame {
                 });
 
         JPanel functional = selectionCard(
-                "Functional", "Lorem ipsum", "icons/gear.png",
+                "Functional", "Models with practical applications", "icons/gear.png",
                 () -> {
                     currentFunctional = true;
                     backButton.setVisible(true);
                     showCard(CARD_FUNC);
                 });
 
+        // Equal sizes for both cards
+        Dimension forced = new Dimension(350, 250);
+        decorative.setPreferredSize(forced);
+        functional.setPreferredSize(forced);
+        decorative.setMinimumSize(forced);
+        functional.setMinimumSize(forced);
+        decorative.setMaximumSize(forced);
+        functional.setMaximumSize(forced);
+
         gbc.gridx = 0; cardsRow.add(decorative, gbc);
         gbc.gridx = 1; cardsRow.add(functional, gbc);
 
+        JPanel centerWrapper = new JPanel(new BorderLayout());
+        centerWrapper.setOpaque(false);
+        centerWrapper.add(cardsRow, BorderLayout.NORTH);
+
         page.add(title, BorderLayout.NORTH);
-        page.add(cardsRow, BorderLayout.CENTER);
+        page.add(centerWrapper, BorderLayout.CENTER);
         return page;
     }
 
@@ -178,29 +195,49 @@ public class AppFrame extends JFrame {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(new EmptyBorder(20, 20, 20, 20));
 
-        content.add(primaryButton("Select OBJ file", e -> onSelectFile(false)));
+        JButton selectBtn = primaryButton("Select OBJ file", e -> onSelectFile(false));
+        selectBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Bigger + Fredoka
+        selectBtn.setFont(fredoka != null ? fredoka.deriveFont(Font.BOLD, 22f) : fallbackFont().deriveFont(Font.BOLD, 22f));
+        Dimension big = new Dimension(820, 72);
+        selectBtn.setPreferredSize(big); selectBtn.setMinimumSize(big); selectBtn.setMaximumSize(big);
+        content.add(selectBtn);
         content.add(gap(10));
+
         styleLabel(fileLabelDecor);
+        fileLabelDecor.setAlignmentX(Component.CENTER_ALIGNMENT);
         content.add(fileLabelDecor);
         content.add(gap(20));
 
-        content.add(sectionCheckbox(outdoorCheckDecor));
-        content.add(gap(8));
-        content.add(sectionCheckbox(detailCheckDecor));
-        content.add(gap(16));
-        content.add(sectionCheckbox(autoSaveCheckDecor));
-        content.add(gap(16));
+        // Rounded, fixed-size, centered options (with selection color inversion)
+        content.add(optionPill(outdoorCheckDecor));
+        content.add(gap(12));
+        content.add(optionPill(detailCheckDecor));
+        content.add(gap(12));
 
-        JPanel actions = new JPanel();
+        // Actions (centered) — equal size buttons + a bit more spacing
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0)); // extra hgap
         actions.setOpaque(false);
-        actions.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 0));
         JButton analyzeButton = primaryButton("Analyse model", e -> onAnalyse());
-        JButton historyButton = pillButton("View history", e -> onShowHistory());
+        JButton historyButton = outlinedButton("View history", e -> onShowHistory());
+        Dimension actionBtnSize = new Dimension(220, 48);
+        analyzeButton.setPreferredSize(actionBtnSize);
+        historyButton.setPreferredSize(actionBtnSize);
         actions.add(analyzeButton);
         actions.add(historyButton);
-
         content.add(actions);
-        page.add(content, BorderLayout.WEST);
+
+        // Bottom-right small Auto-save pill (does not invert)
+        JPanel south = new JPanel(new BorderLayout());
+        south.setOpaque(false);
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 14));
+        right.setOpaque(false);
+        right.add(autoSavePill(autoSaveCheckDecor));
+        south.add(right, BorderLayout.EAST);
+
+        // Center column + bottom-right autosave
+        page.add(centerWrap(content), BorderLayout.CENTER);
+        page.add(south, BorderLayout.SOUTH);
 
         return page;
     }
@@ -213,38 +250,55 @@ public class AppFrame extends JFrame {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(new EmptyBorder(20, 20, 20, 20));
 
-        content.add(primaryButton("Select OBJ file", e -> onSelectFile(true)));
+        JButton selectBtn = primaryButton("Select OBJ file", e -> onSelectFile(true));
+        selectBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Bigger + Fredoka
+        selectBtn.setFont(fredoka != null ? fredoka.deriveFont(Font.BOLD, 22f) : fallbackFont().deriveFont(Font.BOLD, 22f));
+        Dimension big = new Dimension(820, 72);
+        selectBtn.setPreferredSize(big); selectBtn.setMinimumSize(big); selectBtn.setMaximumSize(big);
+        content.add(selectBtn);
         content.add(gap(10));
+
         styleLabel(fileLabelFunc);
+        fileLabelFunc.setAlignmentX(Component.CENTER_ALIGNMENT);
         content.add(fileLabelFunc);
         content.add(gap(20));
 
-        // functional options
-        content.add(sectionCheckbox(forceCheckFunc));
-        content.add(gap(8));
-        content.add(sectionCheckbox(frictionCheckFunc));
-        content.add(gap(8));
-        content.add(sectionCheckbox(weightSupportCheckFunc));
-        content.add(gap(16));
+        // Rounded, fixed-size, centered options (with selection color inversion)
+        content.add(optionPill(forceCheckFunc));
+        content.add(gap(12));
+        content.add(optionPill(frictionCheckFunc));
+        content.add(gap(12));
+        content.add(optionPill(weightSupportCheckFunc));
+        content.add(gap(12));
+        content.add(optionPill(outdoorCheckFunc));
+        content.add(gap(12));
+        content.add(optionPill(detailCheckFunc));
+        content.add(gap(12));
 
-        // shared options below, like in the reference
-        content.add(sectionCheckbox(outdoorCheckFunc));
-        content.add(gap(8));
-        content.add(sectionCheckbox(detailCheckFunc));
-        content.add(gap(16));
-        content.add(sectionCheckbox(autoSaveCheckFunc));
-        content.add(gap(16));
-
-        JPanel actions = new JPanel();
+        // Actions (centered) — equal size buttons + a bit more spacing
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0)); // extra hgap
         actions.setOpaque(false);
-        actions.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 0));
         JButton analyzeButton = primaryButton("Analyse model", e -> onAnalyse());
-        JButton historyButton = pillButton("View history", e -> onShowHistory());
+        JButton historyButton = outlinedButton("View history", e -> onShowHistory());
+        Dimension actionBtnSize = new Dimension(220, 48);
+        analyzeButton.setPreferredSize(actionBtnSize);
+        historyButton.setPreferredSize(actionBtnSize);
         actions.add(analyzeButton);
         actions.add(historyButton);
-
         content.add(actions);
-        page.add(content, BorderLayout.WEST);
+
+        // Bottom-right small Auto-save pill (does not invert)
+        JPanel south = new JPanel(new BorderLayout());
+        south.setOpaque(false);
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 14));
+        right.setOpaque(false);
+        right.add(autoSavePill(autoSaveCheckFunc));
+        south.add(right, BorderLayout.EAST);
+
+        // Center column + bottom-right autosave
+        page.add(centerWrap(content), BorderLayout.CENTER);
+        page.add(south, BorderLayout.SOUTH);
 
         return page;
     }
@@ -260,12 +314,11 @@ public class AppFrame extends JFrame {
         JPanel left = new JPanel(new BorderLayout());
         left.setOpaque(false);
         JLabel meshTitle = new JLabel("Mesh features");
-        meshTitle.setFont(fredoka.deriveFont(26f));
+        meshTitle.setFont(fredoka != null ? fredoka.deriveFont(Font.PLAIN, 26f) : fallbackFont().deriveFont(Font.PLAIN, 26f));
         meshTitle.setForeground(new Color(240, 240, 240));
         meshTitle.setBorder(new EmptyBorder(8, 8, 8, 8));
         left.add(meshTitle, BorderLayout.NORTH);
-        JScrollPane featuresScroll = new JScrollPane(featureArea);
-        featuresScroll.setBorder(new LineBorder(new Color(50, 50, 50), 1, true));
+        JScrollPane featuresScroll = new RoundedScrollPane(featureArea, 18, new Color(50, 50, 50));
         left.add(featuresScroll, BorderLayout.CENTER);
         JButton copyLeft = primaryButton("Copy", e -> copyToClipboard(featureArea.getText()));
         JPanel copyLeftWrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
@@ -277,12 +330,11 @@ public class AppFrame extends JFrame {
         JPanel right = new JPanel(new BorderLayout());
         right.setOpaque(false);
         JLabel recTitle = new JLabel("AI recommendation");
-        recTitle.setFont(fredoka.deriveFont(26f));
+        recTitle.setFont(fredoka != null ? fredoka.deriveFont(Font.PLAIN, 26f) : fallbackFont().deriveFont(Font.PLAIN, 26f));
         recTitle.setForeground(new Color(240, 240, 240));
         recTitle.setBorder(new EmptyBorder(8, 8, 8, 8));
         right.add(recTitle, BorderLayout.NORTH);
-        JScrollPane resultScroll = new JScrollPane(resultArea);
-        resultScroll.setBorder(new LineBorder(new Color(50, 50, 50), 1, true));
+        JScrollPane resultScroll = new RoundedScrollPane(resultArea, 18, new Color(50, 50, 50));
         right.add(resultScroll, BorderLayout.CENTER);
         JButton copyRight = primaryButton("Copy", e -> copyToClipboard(resultArea.getText()));
         JPanel copyRightWrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
@@ -326,7 +378,10 @@ public class AppFrame extends JFrame {
 
             RequirementProfile profile = buildProfile();
             PredictionResult prediction = engine.predict(result.features(), profile);
-            resultArea.setText(prediction.formatSummary() + System.lineSeparator() + prediction.formatDetails());
+
+            // Compose recommendation text and strip any line containing "Confidence"
+            String recText = prediction.formatSummary() + System.lineSeparator() + prediction.formatDetails();
+            resultArea.setText(filterOutConfidence(recText));
 
             boolean autoSave = currentFunctional ? autoSaveCheckFunc.isSelected() : autoSaveCheckDecor.isSelected();
             if (autoSave) {
@@ -339,6 +394,12 @@ public class AppFrame extends JFrame {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Failed to analyse model: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private String filterOutConfidence(String s) {
+        return Arrays.stream(s.split("\\R"))
+                .filter(line -> !line.trim().toLowerCase().startsWith("confidence"))
+                .collect(Collectors.joining(System.lineSeparator()));
     }
 
     private RequirementProfile buildProfile() {
@@ -370,7 +431,7 @@ public class AppFrame extends JFrame {
         map.put("Filament", prediction.filament());
         map.put("InfillPercent", prediction.infillPercent());
         map.put("InfillPattern", prediction.infillPattern());
-        map.put("Confidence", String.format("%.2f", prediction.confidence() * 100));
+        // Intentionally NOT saving Confidence anymore
         map.put("Functional", Boolean.toString(profile.isFunctional()));
         map.put("Force", Boolean.toString(profile.isForce()));
         map.put("Friction", Boolean.toString(profile.isFriction()));
@@ -411,7 +472,7 @@ public class AppFrame extends JFrame {
         area.setEditable(false);
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
-        area.setFont(dmSans != null ? dmSans.deriveFont(14f) : getFont().deriveFont(14f));
+        area.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 14f) : fallbackFont().deriveFont(Font.PLAIN, 14f));
         area.setText(sb.toString());
         area.setCaretPosition(0);
         JScrollPane scrollPane = new JScrollPane(area);
@@ -438,12 +499,25 @@ public class AppFrame extends JFrame {
         return p;
     }
 
+    // Always returns a non-null font
+    private Font fallbackFont() {
+        Font f = UIManager.getFont("Label.font");
+        if (f == null) f = new JLabel().getFont();
+        if (f == null) f = new Font("SansSerif", Font.PLAIN, 12);
+        return f;
+    }
+
+    // Return button: transparent bg + white text (no fill)
     private void styleBackButton(JButton b) {
         b.setFocusPainted(false);
-        b.setForeground(Color.BLACK);
-        b.setBackground(Color.WHITE);
+        b.setForeground(Color.WHITE);
+        b.setBackground(Color.BLACK); // fallback if LAF paints it
         b.setBorder(new EmptyBorder(8, 14, 8, 14));
+        b.setContentAreaFilled(false);
+        b.setBorderPainted(false);
+        b.setOpaque(false);
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
     }
 
     private JPanel selectionCard(String title, String subtitle, String iconPath, Runnable onClick) {
@@ -465,13 +539,13 @@ public class AppFrame extends JFrame {
         JLabel titleL = new JLabel(title);
         titleL.setHorizontalAlignment(SwingConstants.CENTER);
         titleL.setForeground(Color.WHITE);
-        titleL.setFont(fredoka.deriveFont(22f));
+        titleL.setFont(fredoka != null ? fredoka.deriveFont(Font.PLAIN, 22f) : fallbackFont().deriveFont(Font.PLAIN, 22f));
         titleL.setBorder(new EmptyBorder(8, 0, 4, 0));
 
         JLabel sub = new JLabel(subtitle);
         sub.setHorizontalAlignment(SwingConstants.CENTER);
         sub.setForeground(new Color(200, 200, 200));
-        sub.setFont(dmSans != null ? dmSans.deriveFont(14f) : getFont().deriveFont(14f));
+        sub.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 14f) : fallbackFont().deriveFont(Font.PLAIN, 14f));
 
         JPanel center = new JPanel();
         center.setOpaque(false);
@@ -504,68 +578,180 @@ public class AppFrame extends JFrame {
             @Override public void mouseClicked(MouseEvent e) { onClick.run(); }
         });
 
-        card.setPreferredSize(new Dimension(280, 220));
+        card.setPreferredSize(new Dimension(500, 500));
         card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return card;
     }
 
+    // Rounded buttons (primary filled, outlined variant for "View history")
     private JButton primaryButton(String text, java.awt.event.ActionListener l) {
-        JButton b = new JButton(text);
+        PillButton b = new PillButton(text, 22, null);
         b.addActionListener(l);
-        b.setFocusPainted(false);
         b.setBackground(Color.WHITE);
         b.setForeground(Color.BLACK);
-        b.setBorder(new EmptyBorder(12, 16, 12, 16));
+        b.setBorder(new EmptyBorder(12, 18, 12, 18));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
         return b;
     }
 
-    private JButton pillButton(String text, java.awt.event.ActionListener l) {
-        JButton b = new JButton(text);
+    private JButton outlinedButton(String text, java.awt.event.ActionListener l) {
+        PillButton b = new PillButton(text, 22, new Color(80,80,80)); // smooth rounded outline
         b.addActionListener(l);
-        b.setFocusPainted(false);
         b.setBackground(new Color(38, 38, 38));
         b.setForeground(Color.WHITE);
-        b.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(new Color(80,80,80),1,true),
-                new EmptyBorder(10,16,10,16)));
+        b.setBorder(new EmptyBorder(10,16,10,16));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
         return b;
     }
 
+    // Transparent checkbox; pill provides background/shape
     private JCheckBox styledCheckbox(String label) { return styledCheckbox(label, false); }
     private JCheckBox styledCheckbox(String label, boolean selected) {
         JCheckBox cb = new JCheckBox(label, selected);
-        cb.setOpaque(true);
-        cb.setBackground(new Color(30,30,30));
+        cb.setOpaque(false); // pill will draw background
         cb.setForeground(Color.WHITE);
-        cb.setBorder(new EmptyBorder(12, 14, 12, 14));
+        cb.setBorder(new EmptyBorder(0, 0, 0, 0));
         cb.setFocusPainted(false);
         cb.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        cb.addMouseListener(new MouseAdapter() {
-            @Override public void mouseEntered(MouseEvent e) { cb.setBackground(new Color(44,44,44)); }
-            @Override public void mouseExited(MouseEvent e) { cb.setBackground(new Color(30,30,30)); }
-        });
+        cb.setIconTextGap(16); // extra space between glyph and text
+        cb.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
         return cb;
     }
+    // ScrollPane with rounded corners and a subtle outline
+    private static class RoundedScrollPane extends JScrollPane {
+        private final int radius;
+        private final Color outline;
 
-    private Component sectionCheckbox(JCheckBox cb) {
-        JPanel wrap = new JPanel(new BorderLayout());
+        RoundedScrollPane(Component view, int radius, Color outline) {
+            super(view,
+                    JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                    JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+            this.radius = radius;
+            this.outline = outline;
+            setOpaque(false);
+            getViewport().setOpaque(false);
+            setBorder(new EmptyBorder(0, 0, 0, 0));
+            // Keep scrollbars sleek on dark UI
+            getVerticalScrollBar().setUnitIncrement(16);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int w = getWidth();
+            int h = getHeight();
+
+            // Background (matches previous dark panel behind text areas)
+            g2.setColor(new Color(18, 18, 18));
+            g2.fillRoundRect(0, 0, w - 1, h - 1, radius, radius);
+
+            // Outline similar to prior LineBorder color
+            g2.setColor(outline);
+            g2.drawRoundRect(0, 0, w - 1, h - 1, radius, radius);
+
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    }
+
+    // Reusable rounded "pill" for options WITH selection color inversion
+    private Component optionPill(JCheckBox cb) {
+        Dimension size = new Dimension(820, 72); // standard size for every row
+
+        RoundedPanel pill = new RoundedPanel(22);
+        pill.setLayout(new BorderLayout());
+        pill.setBorder(new EmptyBorder(18, 24, 18, 24));
+        pill.setPreferredSize(size);
+        pill.setMinimumSize(size);
+        pill.setMaximumSize(size);
+
+        cb.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 18f) : fallbackFont().deriveFont(Font.PLAIN, 18f));
+        pill.add(cb, BorderLayout.WEST);
+
+        // click pill toggles selection
+        pill.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) { cb.setSelected(!cb.isSelected()); }
+            @Override public void mouseEntered(MouseEvent e) {
+                if (cb.isSelected()) pill.setBackground(new Color(245,245,245));
+                else pill.setBackground(new Color(48,48,48));
+            }
+            @Override public void mouseExited(MouseEvent e) {
+                updatePillVisual(pill, cb);
+            }
+        });
+
+        // update style on (un)check
+        cb.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED || e.getStateChange() == ItemEvent.DESELECTED) {
+                updatePillVisual(pill, cb);
+            }
+        });
+
+        // initial paint
+        updatePillVisual(pill, cb);
+
+        pill.setAlignmentX(Component.CENTER_ALIGNMENT); // centers in BoxLayout
+        return pill;
+    }
+
+    // Small pill for Auto-save (never inverts)
+    private Component autoSavePill(JCheckBox cb) {
+        Dimension size = new Dimension(240, 48);
+
+        RoundedPanel pill = new RoundedPanel(22);
+        pill.setLayout(new BorderLayout());
+        pill.setBorder(new EmptyBorder(10, 16, 10, 16));
+        pill.setPreferredSize(size);
+        pill.setMinimumSize(size);
+        pill.setMaximumSize(size);
+        pill.setBackground(new Color(38,38,38)); // stays dark when selected
+
+        cb.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 14f) : fallbackFont().deriveFont(Font.PLAIN, 14f));
+        cb.setForeground(Color.WHITE);
+        cb.setIconTextGap(12);
+        pill.add(cb, BorderLayout.WEST);
+
+        pill.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) { cb.setSelected(!cb.isSelected()); }
+            @Override public void mouseEntered(MouseEvent e) { pill.setBackground(new Color(48,48,48)); }
+            @Override public void mouseExited(MouseEvent e)  { pill.setBackground(new Color(38,38,38)); }
+        });
+
+        return pill;
+    }
+
+    private void updatePillVisual(RoundedPanel pill, JCheckBox cb) {
+        if (cb.isSelected()) {
+            pill.setBackground(Color.WHITE);
+            cb.setForeground(Color.BLACK);
+        } else {
+            pill.setBackground(new Color(38, 38, 38));
+            cb.setForeground(Color.WHITE);
+        }
+        pill.repaint();
+    }
+
+    // Center a column inside the page regardless of its height
+    private JPanel centerWrap(JComponent c) {
+        JPanel wrap = new JPanel(new GridBagLayout());
         wrap.setOpaque(false);
-        wrap.add(cb, BorderLayout.CENTER);
-        wrap.setBorder(new EmptyBorder(0,0,0,0));
+        wrap.add(c, new GridBagConstraints()); // centers child
         return wrap;
     }
 
     private void styleLabel(JLabel label) {
         label.setForeground(new Color(200, 200, 200));
-        label.setFont(dmSans != null ? dmSans.deriveFont(14f) : getFont().deriveFont(14f));
+        label.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 14f) : fallbackFont().deriveFont(Font.PLAIN, 14f));
     }
 
     private JTextArea createResultTextArea() {
         JTextArea area = new JTextArea();
         area.setEditable(false);
-        area.setFont(dmSans != null ? dmSans.deriveFont(14f) : getFont().deriveFont(14f));
+        area.setFont(dmSans != null ? dmSans.deriveFont(Font.PLAIN, 14f) : fallbackFont().deriveFont(Font.PLAIN, 14f));
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
         area.setBackground(new Color(18,18,18));
@@ -649,6 +835,41 @@ public class AppFrame extends JFrame {
             g2.fillRoundRect(0, 0, w, h, radius, radius);
             g2.dispose();
             super.paintComponent(g);
+        }
+    }
+
+    // Pill-shaped JButton with optional rounded outline
+    private static class PillButton extends JButton {
+        private final int radius;
+        private final Color borderColor;
+
+        PillButton(String text, int radius, Color borderColor) {
+            super(text);
+            this.radius = radius;
+            this.borderColor = borderColor;
+            setFocusPainted(false);
+            setContentAreaFilled(false);
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(getBackground());
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), radius, radius);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            if (borderColor == null) return;
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(borderColor);
+            g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, radius, radius);
+            g2.dispose();
         }
     }
 }
