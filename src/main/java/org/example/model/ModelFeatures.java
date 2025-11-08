@@ -3,7 +3,7 @@ package org.example.model;
 import java.util.Locale;
 
 /**
- * Container for the geometric descriptors extracted from the 3D model.
+ * Container pentru cele 10 caracteristici geometrice extrase din modelul 3D.
  */
 public class ModelFeatures {
 
@@ -81,28 +81,21 @@ public class ModelFeatures {
         return localDensity;
     }
 
-    public float[] toInputVector(RequirementProfile profile) {
+    /**
+     * Returnează cele 10 caracteristici ca vector de float, pentru input în modelul ML.
+     */
+    public float[] toInputVector() {
         return new float[]{
                 round(linearity),
-                (float) planarity,
-                (float) sphericity,
-                (float) anisotropy,
-                (float) curvature,
-                (float) eulerNumber,
-                (float) compactness,
-                (float) aspectRatio,
-                (float) convexity,
-                (float) localDensity,
-                profile.isFunctional() ? 1f : 0f,
-                profile.isForce() ? 1f : 0f,
-                profile.isHeat() ? 1f : 0f,
-                profile.isFriction() ? 1f : 0f,
-                profile.isPressure() ? 1f : 0f,
-                profile.isWeightSupport() ? 1f : 0f,
-                profile.isOutdoor() ? 1f : 0f,
-                profile.isChemical() ? 1f : 0f,
-                profile.isDetail() ? 1f : 0f,
-                profile.isDecorative() ? 1f : 0f
+                round(planarity),
+                round(sphericity),
+                round(anisotropy),
+                round(curvature),
+                round(eulerNumber),
+                round(compactness),
+                round(aspectRatio),
+                round(convexity),
+                round(localDensity)
         };
     }
 
@@ -126,4 +119,3 @@ public class ModelFeatures {
                 localDensity);
     }
 }
-

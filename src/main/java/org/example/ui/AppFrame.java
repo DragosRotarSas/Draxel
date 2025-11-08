@@ -25,6 +25,10 @@ import java.util.Map;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+//import static jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle.details;
+
+//import static jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle.details;
+
 /**
  * Multi-screen UI:
  *  - Category select (Decorative / Functional) after splash
@@ -376,12 +380,27 @@ public class AppFrame extends JFrame {
             FeatureCalculator.Result result = FeatureCalculator.calculate(model);
             featureArea.setText(result.describe());
 
-            RequirementProfile profile = buildProfile();
-            PredictionResult prediction = engine.predict(result.features(), profile);
 
-            // Compose recommendation text and strip any line containing "Confidence"
-            String recText = prediction.formatSummary() + System.lineSeparator() + prediction.formatDetails();
-            resultArea.setText(filterOutConfidence(recText));
+
+            RequirementProfile profile = buildProfile();
+
+            PredictionResult prediction = engine.predict(
+                    result.features(),
+                    profile.isFriction(),
+                    profile.isForce(),
+                    profile.isWeightSupport(),
+                    profile.isDetail(),
+                    profile.isDecorative(),
+                    profile.isFunctional()
+            );
+
+
+
+// Compose recommendation text
+            String recText = prediction.formatSummary() + System.lineSeparator();
+            resultArea.setText(recText);
+
+
 
             boolean autoSave = currentFunctional ? autoSaveCheckFunc.isSelected() : autoSaveCheckDecor.isSelected();
             if (autoSave) {
